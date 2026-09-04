@@ -283,6 +283,24 @@ class RaidenWorkerSync:
         control_addr = (f"{self.ip}:{self._sync.listener_port}"
                         if self._sync and self._sync.listener_port else "")
         num_shards = self._sync.num_shards if self._sync else 1
+        shards = []
+        if self._sync:
+            if hasattr(self._sync, "get_local_endpoints"):
+                eps = self._sync.get_local_endpoints()
+                shards = [""] * num_shards
+                for ep_info in eps:
+                    ep = ep_info.get("endpoint", "")
+                    port = ep.rsplit(":", 1)[-1] if ":" in ep else ""
+                    endpoint_addr = (f"{self.ip}:{port}"
+                                     if port and self.ip != "localhost" else ep)
+                    for s in ep_info.get("shards", []):
+                        if 0 <= s < num_shards:
+                            shards[s] = endpoint_addr
+                for i in range(num_shards):
+                    if not shards[i]:
+                        shards[i] = data_addr
+            elif data_addr:
+                shards = [data_addr] * num_shards
         return {
             "unit": {
                 "job_name":
@@ -290,7 +308,7 @@ class RaidenWorkerSync:
                 "job_replica_id":
                 str(self.worker_index) if self.worker_index else "",
             },
-            "shards": [data_addr] * num_shards if data_addr else [],
+            "shards": shards,
             "control_plane_rpc_address": control_addr,
             "mesh_shape": list(mesh_shape),
             "variables": variables,
